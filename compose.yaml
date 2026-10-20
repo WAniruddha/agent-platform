@@ -1,0 +1,84 @@
+name: agent-platform
+x-api-env: &api-env
+  DATABASE_URL: postgresql://platform:${PLATFORM_DB_PASSWORD:?Run python3 scripts/init_env.py}@db:5432/platform
+  PLATFORM_API_KEY: ${PLATFORM_API_KEY:?Run python3 scripts/init_env.py}
+x-hardened: &hardened
+  read_only: true
+  tmpfs: [/tmp:rw,noexec,nosuid,size=32m]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:?Run python3 scripts/init_env.py}
+      POSTGRES_DB: platform
+    volumes: [pg_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U platform -d platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 768m
+    networks: [control]
+  migrate:
+    build: .
+    <<: *hardened
+    command: [python, -m, agent_platform.migrate]
+    environment: *api-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [control]
+  api:
+    build: .
+    <<: *hardened
+    command: [uvicorn, agent_platform.api:app, --host, 0.0.0.0, --port, "8000", --workers, "1"]
+    ports: ["127.0.0.1:${PLATFORM_PORT:-8765}:8000"]
+    environment: *api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/readyz",timeout=3)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 400m
+    networks: [control]
+  worker:
+    build: .
+    <<: *hardened
+    command: [python, -m, agent_platform.worker]
+    environment:
+      PLATFORM_API_URL: http://api:8000
+      PLATFORM_API_KEY: ${PLATFORM_API_KEY:?Run python3 scripts/init_env.py}
+      WORKER_ID: acer-light-1
+      WORKER_CAPABILITIES: core.echo,core.add
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 384m
+    networks: [control]
+  reaper:
+    build: .
+    <<: *hardened
+    command: [python, -m, agent_platform.reaper]
+    environment: *api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    mem_limit: 128m
+    networks: [control]
+networks:
+  control:
+    driver: bridge
+volumes:
+  pg_data:
