@@ -4,7 +4,8 @@ x-api-env: &api-env
   PLATFORM_API_KEY: ${PLATFORM_API_KEY:?Run python3 scripts/init_env.py}
 x-hardened: &hardened
   read_only: true
-  tmpfs: [/tmp:rw,noexec,nosuid,size=32m]
+  tmpfs:
+    - '/tmp:rw,noexec,nosuid,size=32m'
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   pids_limit: 128
