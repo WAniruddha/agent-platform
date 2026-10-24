@@ -1,0 +1,9 @@
+.git
+.github
+.env
+slack.env
+__pycache__
+.pytest_cache
+.venv
+backups
+artifacts

@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+slack.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+artifacts/
+backups/
+logs/
