@@ -225,3 +225,55 @@ def events(limit: int = 30):
     with connect() as db:
         return db.execute("SELECT * FROM events ORDER BY created_at DESC LIMIT %s",
                           (max(1,min(limit,100)),)).fetchall()
+
+# Agent entries are descriptions only. They do not grant task execution,
+# permit arbitrary commands, or confer independent worker credentials.
+class AgentIn(BaseModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,62}$")
+    runtime: str = Field(pattern=r"^[a-z][a-z0-9_.-]{1,63}$")
+    description: str = Field(default="", max_length=1000)
+    capabilities: list[str] = Field(min_length=1, max_length=30)
+
+    @__import__("pydantic").field_validator("capabilities")
+    @classmethod
+    def validate_capabilities(cls, values):
+        import re
+        if len(set(values)) != len(values) or any(
+            re.fullmatch(r"[a-z][a-z0-9_.-]{2,79}", item) is None
+            for item in values
+        ):
+            raise ValueError("Capabilities must be unique valid identifiers")
+        return values
+
+
+@app.post("/v1/agents", dependencies=[Depends(authenticated)])
+def register_agent(body: AgentIn):
+    """Register metadata only. New agents cannot execute jobs."""
+    with connect() as db:
+        return db.execute(
+            """INSERT INTO agents(id,runtime,description,capabilities)
+               VALUES(%s,%s,%s,%s)
+               ON CONFLICT(id) DO UPDATE SET
+                 runtime=EXCLUDED.runtime,
+                 description=EXCLUDED.description,
+                 capabilities=EXCLUDED.capabilities,
+                 updated_at=now()
+               RETURNING *""",
+            (body.id, body.runtime, body.description, json_value(body.capabilities))
+        ).fetchone()
+
+
+@app.get("/v1/agents", dependencies=[Depends(authenticated)])
+def list_agents():
+    with connect() as db:
+        return db.execute("SELECT * FROM agents ORDER BY id").fetchall()
+
+
+@app.get("/v1/agents/{agent_id}", dependencies=[Depends(authenticated)])
+def get_agent(agent_id: str):
+    with connect() as db:
+        row = db.execute("SELECT * FROM agents WHERE id=%s", (agent_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Agent not found")
+    return row
+
