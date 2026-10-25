@@ -277,3 +277,7 @@ def get_agent(agent_id: str):
         raise HTTPException(404, "Agent not found")
     return row
 
+
+# Explicitly separate narrow worker endpoints from administrator authentication.
+from .hermes_scoped import router as hermes_demo_router
+app.include_router(hermes_demo_router)
