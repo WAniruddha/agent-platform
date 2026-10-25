@@ -1,0 +1,36 @@
+# STAGING TEMPLATE ONLY. Do not enable until isolated runtime is provisioned.
+# Install to /etc/systemd/system/hermes-worker.service after review.
+[Unit]
+Description=Agent Platform restricted Hermes worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hermes-worker
+Group=hermes-worker
+WorkingDirectory=/opt/agent-platform
+ExecStart=/usr/bin/python3 /opt/agent-platform/scripts/hermes_demo_worker.py --execute
+Restart=on-failure
+RestartSec=15
+StartLimitIntervalSec=300
+StartLimitBurst=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0077
+LimitNOFILE=1024
+# This service will NOT work until a dedicated Hermes profile, an authenticated
+# API access mechanism, and sandboxed workspace are supplied to this account.
+# Current demo worker reads the main operator's .env, which this service must
+# never be granted. Do not relax ProtectHome or grant read access to that file.
+
+[Install]
+WantedBy=multi-user.target
