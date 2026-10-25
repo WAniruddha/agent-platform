@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 from typing import Any
 
 from fastapi import FastAPI, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .db import connect, json_value
 
@@ -234,7 +234,7 @@ class AgentIn(BaseModel):
     description: str = Field(default="", max_length=1000)
     capabilities: list[str] = Field(min_length=1, max_length=30)
 
-    @__import__("pydantic").field_validator("capabilities")
+    @field_validator("capabilities")
     @classmethod
     def validate_capabilities(cls, values):
         import re
