@@ -1,0 +1,50 @@
+# Install only after scripts/check_hermes_boot_prereqs.sh succeeds.
+# Runs one fixed demo task only. No arbitrary queue prompts or tool shell grants.
+[Unit]
+Description=Agent Platform isolated Hermes demo worker
+Wants=network-online.target
+After=network-online.target docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=hermes-worker
+Group=hermes-worker
+WorkingDirectory=/var/lib/hermes-worker/workspace
+Environment=HOME=/var/lib/hermes-worker
+Environment=XDG_CONFIG_HOME=/var/lib/hermes-worker/.config
+Environment=PATH=/opt/hermes-worker/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_WORKER_KEY_FILE=/var/lib/hermes-worker/.config/worker.key
+ExecStart=/usr/bin/python3 /opt/agent-platform/scripts/hermes_scoped_worker.py --execute
+ExecStartPre=/usr/bin/test -r /var/lib/hermes-worker/.config/worker.key
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=150
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hermes-worker
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
+LimitNOFILE=1024
+TasksMax=128
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target
