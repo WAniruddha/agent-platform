@@ -1,51 +1,46 @@
-# Scoped Hermes worker: supervised rollout only
+# Scoped Hermes worker: review and supervised testing only
 
-This PR introduces a second, independent **demo-worker credential**. The
-administrative `X-Platform-Key` is not accepted by the new
-`/v1/hermes-demo/*` routes. The routes fix the worker identity and its only
-claimable capability: `hermes.demo.multiply`. The old generic API and existing
-Docker worker are unchanged.
+This branch adds a separate, independent demo-worker API credential.
+The administrative `X-Platform-Key` is not accepted by the new
+`/v1/hermes-demo/*` routes. These endpoints fix the worker ID and its
+sole claimable capability: `hermes.demo.multiply`.
 
-## Security boundary and limitations
+A new host worker reads its key from `HERMES_WORKER_KEY_FILE`, never the
+operator's `.env`. The API reads `HERMES_WORKER_KEY`; if unset or shorter
+than 32 characters, the scoped endpoints reject all requests.
 
-This is **not** a complete service sandbox:
-- The worker still launches Hermes under the invoking Unix user's home/profile.
-- A worker token can only use the dedicated claim/heartbeat/complete routes,
-  but any holder of it can potentially impersonate this demo worker.
-- The API credential must remain secret; never paste it into a chat.
-- There is no general-purpose prompt execution and no enabled systemd unit.
+## Important limitations
 
-## Acer steps, only after branch review
+- This remains a supervised demonstration, **not an isolated service**.
+- Hermes still runs with the invoking account's permissions and profile.
+- A stolen scoped credential could impersonate this one demo worker.
+- The current admin API routes and existing Docker worker remain unchanged.
+- Do not install/enable the systemd service from PR #8.
 
-1. On the Acer, check out this branch and run Python tests.
-2. To enable the scoped API, generate a separate worker credential and append
-   it to the local operator-controlled `.env` with mode 0600. Keep it out of Git.
+## Read-only Acer review
 
-   ```bash
-   cd ~/agent-platform
-   python3 - <<'PY'
-   from pathlib import Path
-   import secrets
-   env = Path(".env")
-   assert env.is_file()
-   assert "HERMES_WORKER_KEY=" not in env.read_text()
-   key = secrets.token_urlsafe(48)
-   with env.open("a") as f:
-       f.write("\\nHERMES_WORKER_KEY=" + key + "\\n")
-   Path("/tmp/hermes-worker-key-stage").write_text(key + "\\n")
-   PY
-   chmod 600 .env /tmp/hermes-worker-key-stage
-   ```
+```bash
+cd ~/agent-platform
+git fetch origin
+git switch --track origin/feat/hermes-scoped-worker-auth
+python3 -m py_compile scripts/hermes_scoped_worker.py src/agent_platform/hermes_scoped.py
+source .venv/bin/activate
+python -m pytest tests/test_hermes_scoped_contract.py -v
+deactivate
+```
 
-   **Do not run the staged-key steps without first reviewing where keys are
-   persisted.** The template intentionally avoids printing keys.
+**Expected:** tests pass; existing platform remains operational; scoped API
+cannot be used until explicitly provisioned with a separate credential.
 
-3. Once the API is rebuilt with the new environment variable, test the
-   authorization boundary: a wrong worker key must return 401 and the
-   normal admin key must not grant scoped-worker access.
-4. Do not start automatic service operation. The dedicated user, isolated
-   home/profile, and filesystem checks still need a separate rollout.
+## Controlled integration rollout (later checkpoint)
 
-Rollback: remove the staged key file and unset the new local env variable,
-then restart only the affected API after deciding whether credential rotation
-is necessary. Never use `docker compose down -v`.
+Provision the credential using a secret-safe installer, verify directory and
+file permissions, then update only the API container using an explicitly
+reviewed Compose configuration. Validate rejection of absent/wrong/admin keys,
+then claim one fixed task and verify lease and completion behavior.
+
+Only after those checks, provision a dedicated Unix user, isolated Hermes
+profile and filesystem boundaries. Never grant the worker read access to the
+full platform `.env` or the operator home. Never commit secret values.
+
+Do not run `docker compose down -v`.
