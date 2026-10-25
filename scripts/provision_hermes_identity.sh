@@ -2,14 +2,14 @@
 # Provision only the service account and private directories. Does NOT install,
 # configure or start Hermes, copy credentials, or alter Docker/Ollama.
 set -euo pipefail
-if [[ ${EUID} -ne 0 ]]; then
-  echo "Run with sudo after reviewing this script" >&2
-  exit 1
-fi
 if [[ "${1:-}" != "--apply" ]]; then
   echo "Dry-run: would create locked hermes-worker system account and private directories."
   echo "To apply: sudo bash scripts/provision_hermes_identity.sh --apply"
   exit 0
+fi
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Run with sudo after reviewing this script" >&2
+  exit 1
 fi
 
 if ! getent group hermes-worker >/dev/null; then
